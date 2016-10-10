@@ -28,16 +28,21 @@ def get_setup_ini(args):
     os.system('/usr/bin/xz -d ' + xz_fn)
     return temp_fn + '_setup.ini'
 
-# Return dependency graph of all packages listed in INIFILE.
+# Return dependency graph of all packages listed in INIFILE, plus a
+# fictitious ’BASE’ package that requires all the packages in the Base
+# category.
 def parse_setup_ini(inifile):
     g = defaultdict(list)
-
     with open(inifile) as f:
         for line in f:
             match = re.match(r'^@\s+(\S+)', line)
             if match:
                 # New package
                 name = match.group(1)
+                continue
+
+            if(re.match(r'^category:.*\bBase\b', line)):
+                g['BASE'].append(name)
                 continue
 
             match = re.match(r'^requires:\s*(.*)$', line)
@@ -70,7 +75,8 @@ def reverse(g, I):
             print("Warning: %s requires the following uninstalled package(s):" % p)
             print(req)
         print("Warning: Any results that follow are unreliable.")
-    return h
+        print("")
+    return {p : h[p] for p in I}
 
 def main():
     parser = argparse.ArgumentParser(description='Find dependency information for Cygwin installation')
@@ -81,6 +87,7 @@ def main():
     group.add_argument('-R', '--recursively-requires', action='store_true', dest='Requires', help='print recursive dependencies of PACKAGE')
     group.add_argument('-n', '--needs', action='store_true', help='print packages that require PACKAGE')
     group.add_argument('-N', '--recursively-needs', action='store_true', dest='Needs', help='print packages that recursively require PACKAGE')
+    group.add_argument('-l', '--leaves', action='store_true', help='print leaves of dependency graph')
     args = parser.parse_args()
 
     inifile = get_setup_ini(args)
@@ -91,10 +98,12 @@ def main():
     all_pkgs_graph = parse_setup_ini(inifile)
 
     inst = get_installed_pkgs()
+    inst_plus_base = inst[:]    # Copy by slicing.
+    inst_plus_base.append('BASE')
 
-    inst_pkgs_graph = {p: all_pkgs_graph[p] for p in inst}
+    inst_pkgs_graph = {p : all_pkgs_graph[p] for p in inst_plus_base}
 
-    rev_graph = reverse(inst_pkgs_graph, inst)
+    rev_graph = reverse(inst_pkgs_graph, inst_plus_base)
 
     if args.requires or args.Requires or args.needs or args.Needs:
         if not args.package:
@@ -111,6 +120,8 @@ def main():
         print(sorted(rev_graph[args.package]))
     elif args.Needs:
         print(sorted(tarjan.tc.tc(rev_graph)[args.package]))
+    elif args.leaves:
+        print(sorted([p for p in inst if not rev_graph[p]]))
 
 
 if __name__ == '__main__':
