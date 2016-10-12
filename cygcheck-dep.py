@@ -82,7 +82,7 @@ def main():
     parser = argparse.ArgumentParser(description='Find dependency information for Cygwin installation')
     parser.add_argument('-i', '--inifile', action='store', help='path to setup.ini', required=False, metavar='FILE')
     parser.add_argument('package', help='package name', metavar='PACKAGE', nargs='?')
-    group = parser.add_mutually_exclusive_group()
+    group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-r', '--requires', action='store_true', help='print dependencies of PACKAGE')
     group.add_argument('-R', '--recursively-requires', action='store_true', dest='Requires', help='print recursive dependencies of PACKAGE')
     group.add_argument('-n', '--needs', action='store_true', help='print packages that require PACKAGE')
