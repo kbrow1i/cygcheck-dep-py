@@ -53,14 +53,39 @@ def parse_setup_ini(inifile):
 
 # Return a list of installed packages.
 def get_installed_pkgs():
-    with open("/var/log/setup.log.full") as f:
-        c = f.read()
-        match = re.search(r'^Dependency order of packages: (.*)$', c,
-                          re.MULTILINE)
-        if not match:
-            print("Can't get list of installed packages from /var/log/setup.log.full.")
-            sys.exit(1)
-        return match.group(1).split()
+    inst = []
+    with open("/etc/setup/installed.db") as f:
+        next(f)                 # Skip header
+        for line in f:
+            match = re.search(r'^(\S*) ', line)
+            inst.append(match.group(1))
+    return inst
+
+# Given a graph g, return a list of strongly-connected components of
+# size > 1 that receive no arrows from any other SCC.
+def find_islands(g):
+    sccs = tarjan.tarjan(g)
+    # For each vertex, record the index of its scc.  Also declare the
+    # scc an island until we discover otherwise.
+    scc_ind = {}
+    is_island = []                # Index is index of scc.
+    for i, c in enumerate(sccs):
+        if len(c) > 1:
+            is_island.append(True)
+        else:
+            is_island.append(False)
+        for v in c:
+            scc_ind[v] = i
+
+    # For each component C, mark as non-island any earlier component
+    # that receives an edge from something in C.
+    for i, c in enumerate(sccs):
+        for v in c:
+            for w in g[v]:
+                if scc_ind[w] < i:
+                    is_island[scc_ind[w]] = False
+
+    return [sccs[i] for i in range(len(sccs)) if is_island[i]]
 
 # Reverse a dependency graph g with installed packages I
 def reverse(g, I):
@@ -79,6 +104,10 @@ def reverse(g, I):
         print("")
     return {p : h[p] for p in I}
 
+# Print list items separated by commas.
+def comma_print(l):
+    print(','.join(l))
+
 def main():
     parser = argparse.ArgumentParser(description='Find dependency information for Cygwin installation')
     parser.add_argument('-p', '--inifile', action='store', help='path to setup.ini', required=False, metavar='FILE')
@@ -89,8 +118,9 @@ def main():
     group.add_argument('-R', '--recursively-requires', action='store_true', dest='Requires', help='show recursive dependencies of PACKAGE')
     group.add_argument('-n', '--needs', action='store_true', help='show packages that require PACKAGE')
     group.add_argument('-N', '--recursively-needs', action='store_true', dest='Needs', help='show packages that recursively require PACKAGE')
-    group.add_argument('-l', '--leaves', action='store_true', help='show leaves of dependency graph')
-    # group.add_argument('-i', '--islands', action='store_true', help='show strongly connected components not required by any others')
+    group.add_argument('-l', '--leaves', action='store_true', help='show packages not required by any others')
+    group.add_argument('-i', '--islands', action='store_true', help='show SCCs with more than one element, not required by any other SCC')
+    group.add_argument('-I', '--all-sccs', action='store_true', dest='all_sccs', help='show all SCCs with more than one element')
     args = parser.parse_args()
 
     inifile = get_setup_ini(args)
@@ -122,15 +152,26 @@ def main():
             print("%s is not installed or not known." % args.package)
             sys.exit(1)
     if args.requires:
-        print(sorted(g[args.package]))
+        comma_print(sorted(g[args.package]))
     elif args.Requires:
-        print(sorted(tarjan.tc.tc(g)[args.package]))
+        comma_print(sorted(tarjan.tc.tc(g)[args.package]))
     elif args.needs:
-        print(sorted(rev_g[args.package]))
+        comma_print(sorted(rev_g[args.package]))
     elif args.Needs:
-        print(sorted(tarjan.tc.tc(rev_g)[args.package]))
+        comma_print(sorted(tarjan.tc.tc(rev_g)[args.package]))
     elif args.leaves:
-        print(sorted([p for p in inst if not rev_g[p]]))
+        leaves = sorted([p for p in inst if not rev_g[p]])
+        for p in leaves:
+            print(p)
+    elif args.islands:
+        islands = find_islands(g)
+        for i in islands:
+            comma_print(sorted(i))
+    elif args.all_sccs:
+        sccs = tarjan.tarjan(g)
+        for c in sccs:
+            if len(c) > 1:
+                comma_print(sorted(c))
 
 
 if __name__ == '__main__':
