@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import urllib.request
+import glob
 
 try:
     import tarjan.tc
@@ -16,7 +17,18 @@ except ImportError:
 
 def get_setup_ini(args):
     if args.inifile:
+        if args.cached:
+            print("Ignoring -c option.")
         return args.inifile
+    if args.cached:
+        files = glob.glob('/tmp/tmp*_setup.ini')
+        if not files:
+            print("No /tmp/tmp*_setup.ini file found.")
+            sys.exit(1)
+        if len(files) > 1:
+            print("More than one /tmp/tmp*_setup.ini file found.")
+            sys.exit(1)
+        return files[0]
     
     arch = os.uname().machine
     if arch == 'i686':
@@ -110,6 +122,7 @@ def comma_print(l):
 
 def main():
     parser = argparse.ArgumentParser(description='Find dependency information for Cygwin installation')
+    parser.add_argument('-c', '--cached', action='store_true', help='use cached setup.ini', required=False)
     parser.add_argument('-p', '--inifile', action='store', help='path to setup.ini', required=False, metavar='FILE')
     parser.add_argument('-a', '--all-packages', action='store_true', dest='all', help='report on all packages, not just those installed')
     parser.add_argument('package', help='package name', metavar='PACKAGE', nargs='?')
