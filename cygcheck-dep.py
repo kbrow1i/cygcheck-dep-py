@@ -99,22 +99,40 @@ def find_islands(g):
 
     return [sccs[i] for i in range(len(sccs)) if is_island[i]]
 
-# Reverse a dependency graph g with installed packages I
-def reverse(g, I):
+# Reverse a graph g with vertex set V.
+def reverse(g, V):
     h = defaultdict(list)
-    warnings = defaultdict(list)
     for p, req in g.items():
         for q in req:
             h[q].append(p)
+    return {p : h[p] for p in V}
+
+# Given a dependency graph and a list of installed packages, return a
+# dictionary {p : req} where req is a list of dependencies of p that
+# are not in I.
+def find_missing_deps(g, I):
+    missing = defaultdict(list)
+    for p in g:
+        for q in g[p]:
             if not q in I:
-                warnings[p].append(q)
-    if warnings:
-        for p, req in warnings.items():
-            print("Warning: %s requires the following uninstalled package(s):" % p)
-            print(req)
-        print("Warning: Any results that follow are unreliable.")
-        print("")
-    return {p : h[p] for p in I}
+                missing[p].append(q)
+    return missing
+
+# Return a list of unknown installed packages (not listed in setup.ini).
+def find_unknown_pkgs(g, I):
+    return [p for p in I if p not in g]
+
+def report_broken(g, I):
+    missing = find_missing_deps(g, I)
+    if missing:
+        print("Missing dependencies:")
+        for p in missing:
+            print("%s: " % p, end='')
+            comma_print(missing[p])
+    unknown = find_unknown_pkgs(g, I)
+    if unknown:
+        print("Unknown packages:")
+        comma_print(unknown)
 
 # Print list items separated by commas.
 def comma_print(l):
@@ -122,7 +140,7 @@ def comma_print(l):
 
 def main():
     parser = argparse.ArgumentParser(description='Find dependency information for Cygwin installation')
-    parser.add_argument('-c', '--cached', action='store_true', help='use cached setup.ini', required=False)
+    parser.add_argument('-c', '--cached', action='store_true', help='use cached setup.ini file', required=False)
     parser.add_argument('-p', '--inifile', action='store', help='path to setup.ini', required=False, metavar='FILE')
     parser.add_argument('-a', '--all-packages', action='store_true', dest='all', help='report on all packages, not just those installed')
     parser.add_argument('package', help='package name', metavar='PACKAGE', nargs='?')
@@ -134,6 +152,7 @@ def main():
     group.add_argument('-l', '--leaves', action='store_true', help='show packages not required by any others')
     group.add_argument('-i', '--islands', action='store_true', help='show SCCs with more than one element, not required by any other SCC')
     group.add_argument('-I', '--all-sccs', action='store_true', dest='all_sccs', help='show all SCCs with more than one element')
+    group.add_argument('-b', '--broken', action='store_true', help='show installed packages with broken or unknown dependencies')
     args = parser.parse_args()
 
     inifile = get_setup_ini(args)
@@ -148,7 +167,7 @@ def main():
         inst = get_installed_pkgs()
         inst_plus_base = inst[:]    # Copy by slicing.
         inst_plus_base.append('BASE')
-        g = {p : all_pkgs_graph[p] for p in inst_plus_base}
+        g = {p : all_pkgs_graph[p] for p in all_pkgs_graph if p in inst_plus_base}
     else:
         g = all_pkgs_graph
         inst_plus_base = list(g.keys())
@@ -185,7 +204,8 @@ def main():
         for c in sccs:
             if len(c) > 1:
                 comma_print(sorted(c))
-
+    elif args.broken:
+        report_broken(g, inst)
 
 if __name__ == '__main__':
     main()
