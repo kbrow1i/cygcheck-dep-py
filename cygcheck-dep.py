@@ -122,17 +122,22 @@ def find_missing_deps(g, I):
 def find_unknown_pkgs(g, I):
     return [p for p in I if p not in g]
 
+# Return True if warnings were issued.
 def report_broken(g, I):
+    ret = False
     missing = find_missing_deps(g, I)
     if missing:
+        ret = True
         print("Missing dependencies:")
         for p in missing:
             print("%s: " % p, end='')
             comma_print(missing[p])
     unknown = find_unknown_pkgs(g, I)
     if unknown:
+        ret = True
         print("Unknown packages:")
         comma_print(unknown)
+    return ret
 
 # Print list items separated by commas.
 def comma_print(l):
@@ -142,6 +147,7 @@ def main():
     parser = argparse.ArgumentParser(description='Find dependency information for Cygwin installation')
     parser.add_argument('-c', '--cached', action='store_true', help='use cached setup.ini file', required=False)
     parser.add_argument('-p', '--inifile', action='store', help='path to setup.ini', required=False, metavar='FILE')
+    parser.add_argument('-q', '--quiet', action='store_true', help='suppress warnings about broken dependencies')
     parser.add_argument('-a', '--all-packages', action='store_true', dest='all', help='report on all packages, not just those installed')
     parser.add_argument('package', help='package name', metavar='PACKAGE', nargs='?')
     group = parser.add_mutually_exclusive_group(required=True)
@@ -174,7 +180,9 @@ def main():
         inst = inst_plus_base[:]
         inst.remove('BASE')
 
-    rev_g = reverse(g, inst_plus_base)
+    if not args.quiet and not args.broken:
+        if report_broken(g, inst):
+            print("\nWarning: The results that follow might be unreliable.\n")
 
     if args.requires or args.Requires or args.needs or args.Needs:
         if not args.package:
@@ -183,6 +191,10 @@ def main():
         if args.package not in inst:
             print("%s is not installed or not known." % args.package)
             sys.exit(1)
+
+    if args.requires or args.Requires or args.needs or args.Needs or args.leaves:
+        rev_g = reverse(g, inst_plus_base)
+
     if args.requires:
         comma_print(sorted(g[args.package]))
     elif args.Requires:
