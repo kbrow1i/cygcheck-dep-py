@@ -198,7 +198,14 @@ def main():
     if args.requires:
         comma_print(sorted(g[args.package]))
     elif args.Requires:
-        comma_print(sorted(tarjan.tc.tc(g)[args.package]))
+        # tarjan.tc.tc() will fail with a KeyError if there were
+        # missing dependencies.
+        try:
+            h = tarjan.tc.tc(g)
+        except KeyError as err:
+            print("KeyError: %s" % format(err))
+            sys.exit(1)
+        comma_print(sorted(h[args.package]))
     elif args.needs:
         comma_print(sorted(rev_g[args.package]))
     elif args.Needs:
