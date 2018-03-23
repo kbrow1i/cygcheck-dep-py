@@ -65,7 +65,8 @@ def parse_setup_ini(inifile):
                 # current version of the package.  We really probably
                 # be using the installed version if there is one.
                 found_depends = True
-                g[name] = match.group(1).split()
+                if match.group(1):
+                    g[name] = re.split(r',\s*', match.group(1))
     return g
 
 # Return a list of installed packages.
