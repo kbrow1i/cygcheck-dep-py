@@ -52,14 +52,19 @@ def parse_setup_ini(inifile):
                 # New package
                 name = match.group(1)
                 g[name] = []
+                found_depends = False
                 continue
 
             if(re.match(r'^category:.*\bBase\b', line)):
                 g['BASE'].append(name)
                 continue
 
-            match = re.match(r'^requires:\s*(.*)$', line)
-            if match:
+            match = re.match(r'^depends2:\s*(.*)$', line)
+            if match and not found_depends:
+                # FIXME: We're using the dependency info for the
+                # current version of the package.  We really probably
+                # be using the installed version if there is one.
+                found_depends = True
                 g[name] = match.group(1).split()
     return g
 
