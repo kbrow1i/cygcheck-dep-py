@@ -40,34 +40,47 @@ def get_setup_ini(args):
     os.system('/usr/bin/xz -d ' + xz_fn)
     return temp_fn + '_setup.ini'
 
-# Return dependency graph of all packages listed in INIFILE, plus a
-# fictitious ’BASE’ package that requires all the packages in the Base
-# category.
+# Return a pair of graphs.  The first is the dependency graph of all
+# packages listed in INIFILE, plus a fictitious ’BASE’ package that
+# requires all the packages in the Base category.  (FIXME: We look only
+# at the current version of each package.  We should probably use the
+# installed version if there is one.)  The second is the "obsoletes" graph.
 def parse_setup_ini(inifile):
     g = defaultdict(list)
+    h= defaultdict(list)
     with open(inifile) as f:
+        done_with_entry = False
         for line in f:
             match = re.match(r'^@\s+(\S+)', line)
             if match:
                 # New package
                 name = match.group(1)
                 g[name] = []
-                found_depends = False
+                done_with_entry = False
+
+            if done_with_entry:
                 continue
 
-            if(re.match(r'^category:.*\bBase\b', line)):
+            if line.startswith('[prev]') or line.startswith('[test]'):
+                done_with_entry = True
+                continue
+
+            match = re.match(r'^(\S+):\s*(.*)$', line)
+            if not match:
+                continue
+
+            keyword = match.group(1)
+            value = match.group(2)
+            if keyword == 'category' and re.match(r'\bBase\b', value):
                 g['BASE'].append(name)
-                continue
 
-            match = re.match(r'^depends2:\s*(.*)$', line)
-            if match and not found_depends:
-                # FIXME: We're using the dependency info for the
-                # current version of the package.  We really probably
-                # be using the installed version if there is one.
-                found_depends = True
-                if match.group(1):
-                    g[name] = re.split(r',\s*', match.group(1))
-    return g
+            elif keyword == 'depends2' and value:
+                g[name] = [s.strip() for s in value.split(',')]
+
+            elif keyword == 'obsoletes' and value:
+                h[name] = [s.strip() for s in value.split(',')]
+
+    return g, h
 
 # Return a list of installed packages.
 def get_installed_pkgs():
@@ -172,11 +185,22 @@ def main():
         print("%s doesn't exist" % inifile)
         sys.exit(1)
 
-    all_pkgs_graph = parse_setup_ini(inifile)
+    all_pkgs_graph, obs_graph = parse_setup_ini(inifile)
 
     # Create working dependency graph g, which always includes 'BASE'.
     if not args.all:
         inst = get_installed_pkgs()
+        # If p obsoletes q and some installed package requires q, then
+        # setup allows q to not be installed; but p must be.  We can
+        # therefore pretend that q is installed.  [We'll get a "missing
+        # dependency" error if p is not installed.]
+        obs = set()
+        for p in obs_graph:
+            obs |= set(obs_graph[p])
+        set_inst = set(inst)
+        for p in inst:
+            set_inst |= set(all_pkgs_graph[p]) & obs
+        inst = list(set_inst)
         inst_plus_base = inst[:]    # Copy by slicing.
         inst_plus_base.append('BASE')
         g = {p : all_pkgs_graph[p] for p in all_pkgs_graph if p in inst_plus_base}
