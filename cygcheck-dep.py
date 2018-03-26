@@ -40,14 +40,16 @@ def get_setup_ini(args):
     os.system('/usr/bin/xz -d ' + xz_fn)
     return temp_fn + '_setup.ini'
 
-# Return a pair of graphs.  The first is the dependency graph of all
-# packages listed in INIFILE, plus a fictitious ’BASE’ package that
-# requires all the packages in the Base category.  (FIXME: We look only
-# at the current version of each package.  We should probably use the
-# installed version if there is one.)  The second is the "obsoletes" graph.
+# Return a pair consisting of a graph and a set.  The graph is the
+# dependency graph of all packages listed in INIFILE, plus a
+# fictitious ’BASE’ package that requires all the packages in the Base
+# category.  (FIXME: We look only at the current version of each
+# package.  We should probably use the installed version if there is
+# one.)  The set is the set of obsoleted package via the obsoletes:
+# keyword.
 def parse_setup_ini(inifile):
     g = defaultdict(list)
-    h= defaultdict(list)
+    S = set()
     with open(inifile) as f:
         done_with_entry = False
         for line in f:
@@ -78,9 +80,9 @@ def parse_setup_ini(inifile):
                 g[name] = [s.strip() for s in value.split(',')]
 
             elif keyword == 'obsoletes' and value:
-                h[name] = [s.strip() for s in value.split(',')]
+                S |= {s.strip() for s in value.split(',')}
 
-    return g, h
+    return g, S
 
 # Return a list of installed packages.
 def get_installed_pkgs():
@@ -185,7 +187,7 @@ def main():
         print("%s doesn't exist" % inifile)
         sys.exit(1)
 
-    all_pkgs_graph, obs_graph = parse_setup_ini(inifile)
+    all_pkgs_graph, obs = parse_setup_ini(inifile)
 
     # Create working dependency graph g, which always includes 'BASE'.
     if not args.all:
@@ -194,9 +196,6 @@ def main():
         # setup allows q to not be installed; but p must be.  We can
         # therefore pretend that q is installed.  [We'll get a "missing
         # dependency" error if p is not installed.]
-        obs = set()
-        for p in obs_graph:
-            obs |= set(obs_graph[p])
         set_inst = set(inst)
         for p in inst:
             set_inst |= set(all_pkgs_graph[p]) & obs
