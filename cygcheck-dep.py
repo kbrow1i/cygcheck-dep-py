@@ -34,10 +34,10 @@ def get_setup_ini(args):
     if arch == 'i686':
         arch = 'x86'
 
-    temp_fn, headers = urllib.request.urlretrieve('ftp://ftp.cygwin.com/pub/cygwin/' + arch + '/setup.xz')
-    xz_fn = temp_fn + '_setup.ini.xz'
-    os.rename(temp_fn, xz_fn)
-    os.system('/usr/bin/xz -d ' + xz_fn)
+    temp_fn, headers = urllib.request.urlretrieve('ftp://ftp.cygwin.com/pub/cygwin/' + arch + '/setup.zst')
+    zst_fn = temp_fn + '_setup.ini.zst'
+    os.rename(temp_fn, zst_fn)
+    os.system('/usr/bin/zstd -d --rm ' + zst_fn)
     return temp_fn + '_setup.ini'
 
 # Return a pair consisting of a graph and a set.  The graph is the
