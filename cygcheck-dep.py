@@ -45,10 +45,17 @@ def get_setup_ini(args):
 # fictitious ’BASE’ package that requires all the packages in the Base
 # category.  (FIXME: We look only at the current version of each
 # package.  We should probably use the installed version if there is
-# one.)  The set is the set of obsoleted package via the obsoletes:
+# one.)  The set is the set of obsoleted package via the 'obsoletes:'
 # keyword.
+
+# For now we support the 'provides:' keyword only minimally.  We build
+# a "provides" graph h while reading INIFILE; it currently contains
+# the single entry h[perl_base] = [perl5_030].  Then at the end, we
+# replace all occurrences of perl5_030 in the dependency graph by
+# perl_base.
 def parse_setup_ini(inifile):
     g = defaultdict(list)
+    h = defaultdict(list)
     S = set()
     with open(inifile) as f:
         done_with_entry = False
@@ -79,8 +86,15 @@ def parse_setup_ini(inifile):
             elif keyword == 'depends2' and value:
                 g[name] = [s.strip() for s in value.split(',')]
 
+            elif keyword == 'provides' and value:
+                h[name] = [s.strip() for s in value.split(',')]
+
             elif keyword == 'obsoletes' and value:
                 S |= {s.strip() for s in value.split(',')}
+
+    for p in h:
+        for q in g:
+            g[q] = [p if x == h[p][0] else x for x in g[q]]
 
     return g, S
 
